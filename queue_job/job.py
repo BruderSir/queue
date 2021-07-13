@@ -539,7 +539,15 @@ class Job(object):
 
     @property
     def func(self):
-        recordset = self.recordset.with_context(job_uuid=self.uuid)
+        # The original context is not used by the job queue. In some situations
+        # the langugage is needed for creating the proper texts.
+        # In https://github.com/OCA/queue/pull/121 a generic approach awaiting
+        # merge. When this PR is merged we can port the merge to 10.0 and
+        # switch repos again.
+        default_context = {'lang': 'de_DE'}
+        recordset = self.recordset\
+            .with_context(**default_context)\
+            .with_context(job_uuid=self.uuid)
         recordset = recordset.sudo(self.user_id)
         return getattr(recordset, self.method_name)
 
