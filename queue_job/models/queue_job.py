@@ -100,6 +100,17 @@ class QueueJob(models.Model):
                 "'enqueued') AND identity_key IS NOT NULL;"
             )
 
+    @api.model
+    def create(self, vals):
+        rec = super(QueueJob, self).create(vals)
+
+        # Prevent loss of channel information through recomputation. This
+        # is needed for dynamically created subchannels
+        channel = vals.get('channel', False)
+        rec.channel = channel or rec.channel
+
+        return rec
+
     @api.multi
     def _inverse_channel(self):
         self.filtered(lambda a: not a.channel)._compute_channel()
@@ -108,7 +119,13 @@ class QueueJob(models.Model):
     @api.depends('job_function_id.channel_id')
     def _compute_channel(self):
         for record in self:
-            record.channel = record.job_function_id.channel
+            job_func_channel = record.job_function_id.channel \
+                or 'NO_CHANNEL_FOUND'
+            is_sub_channel = record.channel \
+                and record.channel.startswith(job_func_channel)
+
+            if not record.channel or not is_sub_channel:
+                record.channel = record.job_function_id.channel
 
     @api.multi
     @api.depends('model_name', 'method_name', 'job_function_id.channel_id')

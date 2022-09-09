@@ -6,6 +6,7 @@
 from heapq import heappush, heappop
 import logging
 from weakref import WeakValueDictionary
+import os
 
 from ..exception import ChannelNotFound
 from ..job import PENDING, ENQUEUED, STARTED, FAILED, DONE
@@ -989,7 +990,14 @@ class ChannelManager(object):
         for subchannel_name in channel_name.split('.')[1:]:
             subchannel = parent.get_subchannel_by_name(subchannel_name)
             if not subchannel:
-                subchannel = Channel(subchannel_name, parent, capacity=None)
+                capacity = os.environ.get(
+                    'ODOO_QUEUE_AUTOCREATE_CHANNEL_CAPACITY', None)
+                try:
+                    capacity = int(capacity)
+                    assert capacity > 0
+                except (ValueError, AssertionError):
+                    capacity = None
+                subchannel = Channel(subchannel_name, parent, capacity=capacity)
                 self._channels_by_name[subchannel.fullname] = subchannel
             parent = subchannel
         return parent
@@ -997,7 +1005,10 @@ class ChannelManager(object):
     def notify(self, db_name, channel_name, uuid,
                seq, date_created, priority, eta, state):
         try:
-            channel = self.get_channel_by_name(channel_name)
+            auto = os.environ.get(
+                'ODOO_QUEUE_ENABLE_DYNAMIC_CHANNEL_CREATION', 'False'
+            ).lower() == 'true'
+            channel = self.get_channel_by_name(channel_name, autocreate=auto)
         except ChannelNotFound:
             _logger.warning('unknown channel %s, '
                             'using root channel for job %s',
