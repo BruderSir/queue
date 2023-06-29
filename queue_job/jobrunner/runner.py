@@ -240,9 +240,19 @@ def _async_http_get(scheme, host, port, user, password, db_name, job_uuid):
             auth = None
             if user:
                 auth = (user, password)
+
             # we are not interested in the result, so we set a short timeout
             # but not too short so we trap and log hard configuration errors
-            response = session.get(url, timeout=1, auth=auth)
+            env_timeout = os.environ.get(
+                'ODOO_QUEUE_SET_RUNJOB_REQUEST_TIMEOUT', 1
+            )
+            try:
+                env_timeout = int(env_timeout)
+                assert env_timeout > 0
+            except (ValueError, AssertionError):
+                env_timeout = 1
+
+            response = session.get(url, timeout=env_timeout, auth=auth)
 
             # raise_for_status will result in either nothing, a Client Error
             # for HTTP Response codes between 400 and 500 or a Server Error
